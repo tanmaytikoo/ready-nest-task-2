@@ -1,0 +1,349 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  STUDENT
+  TEACHER
+  ADMIN
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  password      String
+  role          Role      @default(STUDENT)
+  emailVerified DateTime?
+  avatar        String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  student       Student?
+  teacher       Teacher?
+  
+  noticesAuthored Notice[]
+  noticeReads     NoticeRead[]
+  notifications   Notification[]
+}
+
+model Department {
+  id        String   @id @default(cuid())
+  name      String
+  code      String   @unique
+  createdAt DateTime @default(now())
+
+  courses     Course[]
+  students    Student[]
+  teachers    Teacher[]
+  timetables  Timetable[]
+}
+
+model Course {
+  id           String   @id @default(cuid())
+  name         String
+  code         String   @unique
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+
+  semesters    Semester[]
+  subjects     Subject[]
+}
+
+model Semester {
+  id        String   @id @default(cuid())
+  number    Int
+  courseId  String
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  students   Student[]
+  subjects   Subject[]
+  timetables Timetable[]
+}
+
+model Subject {
+  id          String   @id @default(cuid())
+  name        String
+  code        String   @unique
+  courseId    String
+  semesterId  String
+  
+  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  semester    Semester @relation(fields: [semesterId], references: [id], onDelete: Cascade)
+
+  teachers    TeacherSubject[]
+  students    StudentSubject[]
+  attendances Attendance[]
+  assignments Assignment[]
+  timetableSlots TimetableSlot[]
+  notes       Note[]
+}
+
+model Student {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  enrollmentNo String   @unique
+  departmentId String
+  semesterId   String
+  
+  department   Department @relation(fields: [departmentId], references: [id])
+  semester     Semester   @relation(fields: [semesterId], references: [id])
+
+  subjects     StudentSubject[]
+  attendanceRecords AttendanceRecord[]
+  submissions  AssignmentSubmission[]
+  notes        Note[]
+  tasks        Task[]
+}
+
+model Teacher {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+
+  subjects     TeacherSubject[]
+  attendancesGiven Attendance[]
+  assignmentsGiven Assignment[]
+  timetableSlots TimetableSlot[]
+}
+
+model TeacherSubject {
+  teacherId String
+  subjectId String
+  teacher   Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@id([teacherId, subjectId])
+}
+
+model StudentSubject {
+  studentId String
+  subjectId String
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@id([studentId, subjectId])
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+model Attendance {
+  id        String   @id @default(cuid())
+  date      DateTime
+  subjectId String
+  teacherId String
+  
+  subject   Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  teacher   Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  records   AttendanceRecord[]
+}
+
+model AttendanceRecord {
+  id           String           @id @default(cuid())
+  attendanceId String
+  studentId    String
+  status       AttendanceStatus
+
+  attendance   Attendance @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
+  student      Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([attendanceId, studentId])
+}
+
+model Assignment {
+  id          String   @id @default(cuid())
+  title       String
+  description String
+  deadline    DateTime
+  priority    String   @default("NORMAL") // LOW, NORMAL, HIGH
+  attachments String?  // JSON string array of URLs
+  
+  subjectId   String
+  teacherId   String
+  
+  subject     Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  teacher     Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  submissions AssignmentSubmission[]
+}
+
+model AssignmentSubmission {
+  id           String   @id @default(cuid())
+  assignmentId String
+  studentId    String
+  content      String?
+  attachments  String?  // JSON string array of URLs
+  grade        String?
+  feedback     String?
+  submittedAt  DateTime @default(now())
+
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  student      Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([assignmentId, studentId])
+}
+
+enum NoticeCategory {
+  ACADEMIC
+  EVENTS
+  EXAMS
+  DEPARTMENT
+  EMERGENCY
+}
+
+model Notice {
+  id        String         @id @default(cuid())
+  title     String
+  content   String
+  category  NoticeCategory
+  pinned    Boolean        @default(false)
+  isGlobal  Boolean        @default(false)
+  authorId  String
+  
+  author    User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  createdAt DateTime       @default(now())
+
+  reads     NoticeRead[]
+}
+
+model NoticeRead {
+  id        String   @id @default(cuid())
+  noticeId  String
+  userId    String
+  readAt    DateTime @default(now())
+
+  notice    Notice   @relation(fields: [noticeId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([noticeId, userId])
+}
+
+model Timetable {
+  id           String   @id @default(cuid())
+  departmentId String
+  semesterId   String
+
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  semester     Semester   @relation(fields: [semesterId], references: [id], onDelete: Cascade)
+
+  slots        TimetableSlot[]
+}
+
+enum DayOfWeek {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+model TimetableSlot {
+  id          String    @id @default(cuid())
+  timetableId String
+  dayOfWeek   DayOfWeek
+  startTime   String    // e.g. "09:00"
+  endTime     String    // e.g. "10:00"
+  room        String
+  
+  subjectId   String
+  teacherId   String
+
+  timetable   Timetable @relation(fields: [timetableId], references: [id], onDelete: Cascade)
+  subject     Subject   @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  teacher     Teacher   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+}
+
+model Note {
+  id        String   @id @default(cuid())
+  title     String
+  content   String   // Rich text HTML/JSON
+  isFavorite Boolean @default(false)
+  
+  studentId String
+  subjectId String?
+  attachments String?
+
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subject   Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tags      NoteTag[]
+}
+
+model NoteTag {
+  id     String @id @default(cuid())
+  noteId String
+  name   String
+
+  note   Note   @relation(fields: [noteId], references: [id], onDelete: Cascade)
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
+model Task {
+  id          String     @id @default(cuid())
+  title       String
+  description String?
+  deadline    DateTime?
+  priority    String     @default("NORMAL")
+  status      TaskStatus @default(PENDING)
+  
+  studentId   String
+  student     Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+enum NotificationType {
+  ASSIGNMENT
+  ATTENDANCE
+  TIMETABLE
+  NOTICE
+  REMINDER
+  SYSTEM
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  title     String
+  message   String
+  type      NotificationType
+  read      Boolean          @default(false)
+  
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime         @default(now())
+}
+
+model VerificationToken {
+  id        String   @id @default(cuid())
+  email     String
+  token     String
+  expires   DateTime
+
+  @@unique([email, token])
+}
