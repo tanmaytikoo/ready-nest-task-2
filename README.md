@@ -57,6 +57,7 @@ Students have access only to their personal academic information, including atte
 ### Teacher
 
 Teachers are provided with dedicated management tools to oversee attendance, assignments, notices, and student performance for the classes assigned to them.
+Access Key - NOVA-TEACH-2026
 
 ### Super Administrator
 
